@@ -28,6 +28,7 @@ type CreateParams struct {
 	ParentIssueKey   string
 	Summary          string
 	Body             string
+	BodyIsJiraMarkup bool
 	Priority         string
 	Reporter         string
 	Assignee         string
@@ -38,6 +39,8 @@ type CreateParams struct {
 	OriginalEstimate string
 	CustomFields     map[string]string
 	Template         string
+	JiraTemplate     string
+	TemplateVars     map[string]string
 	NoInput          bool
 	Debug            bool
 }
@@ -67,6 +70,10 @@ And, this field is mandatory when creating a sub-task.`)
 	cmd.Flags().StringP("original-estimate", "e", "", prefix+" Original estimate")
 	cmd.Flags().StringToString("custom", custom, "Set custom fields")
 	cmd.Flags().StringP("template", "T", "", "Path to a file to read body/description from")
+	if prefix != "Epic" {
+		cmd.Flags().String("jira-template", "", "Deviniti Issue Template ID (e.g. 14866)")
+		cmd.Flags().StringToString("template-var", custom, "Set Deviniti Issue Template variables")
+	}
 	cmd.Flags().Bool("web", false, "Open in web browser after successful creation")
 	cmd.Flags().Bool("no-input", false, "Disable prompt for non-required fields")
 }

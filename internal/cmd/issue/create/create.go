@@ -3,6 +3,7 @@ package create
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/AlecAivazis/survey/v2"
 	"github.com/spf13/cobra"
@@ -36,6 +37,9 @@ $ jira issue create --template /path/to/template.tmpl
 
 # Get description from standard input
 $ jira issue create --template -
+
+	# Create issue from a Deviniti Issue Template
+	$ jira issue create --jira-template 14866 --template-var TITLE="My Task" -tStory --no-input
 
 # Create issue in the configured project with JSON output
 $ jira issue create --raw
@@ -78,6 +82,16 @@ func create(cmd *cobra.Command, _ []string) {
 
 	params := parseFlags(cmd.Flags())
 	client := api.DefaultClient(params.Debug)
+	if params.JiraTemplate != "" {
+		if params.IssueType == "" {
+			cmdutil.Failed("Param `--type` is mandatory when using `--jira-template`")
+		}
+		s := cmdutil.Info("Fetching template...")
+		err := applyIssueTemplate(client, project, params)
+		s.Stop()
+		cmdutil.ExitIfError(err)
+	}
+
 	cc := createCmd{
 		client: client,
 		params: params,
@@ -108,12 +122,17 @@ func create(cmd *cobra.Command, _ []string) {
 		s := cmdutil.Info("Creating an issue...")
 		defer s.Stop()
 
+		var body any = params.Body
+		if params.BodyIsJiraMarkup {
+			body = jira.JiraMarkup(params.Body)
+		}
+
 		cr := jira.CreateRequest{
 			Project:          project,
 			IssueType:        params.IssueType,
 			ParentIssueKey:   params.ParentIssueKey,
 			Summary:          params.Summary,
-			Body:             params.Body,
+			Body:             body,
 			Reporter:         params.Reporter,
 			Assignee:         params.Assignee,
 			Priority:         params.Priority,
@@ -125,6 +144,7 @@ func create(cmd *cobra.Command, _ []string) {
 			CustomFields:     params.CustomFields,
 			EpicField:        viper.GetString("epic.link"),
 		}
+		cr.JiraTemplateID = params.JiraTemplate
 		cr.ForProjectType(projectType)
 		cr.ForInstallationType(installation)
 		if configuredCustomFields, err := cmdcommon.GetConfiguredCustomFields(); err == nil {
@@ -158,6 +178,114 @@ func create(cmd *cobra.Command, _ []string) {
 	}
 }
 
+func applyIssueTemplate(client *jira.Client, project string, params *cmdcommon.CreateParams) error {
+	projectResp, err := client.GetProjectV2(project)
+	if err != nil {
+		return err
+	}
+
+	issueTypeID, err := resolveIssueTypeID(params.IssueType)
+	if err != nil {
+		return err
+	}
+
+	templateResp, err := client.GetIssueTemplate(params.JiraTemplate, projectResp.ID, issueTypeID)
+	if err != nil {
+		return err
+	}
+
+	for _, variable := range templateResp.UserVariables {
+		if !variable.Required {
+			continue
+		}
+		if strings.TrimSpace(params.TemplateVars[variable.Key]) == "" {
+			return fmt.Errorf("required template variable %q is missing", variable.Key)
+		}
+	}
+
+	for _, field := range templateResp.Fields {
+		substituted := jira.SubstituteTemplateVars(field.Text1, params.TemplateVars)
+
+		switch field.FieldType {
+		case jira.TemplateFieldSummary:
+			if params.Summary == "" || field.Overwritable {
+				params.Summary = substituted
+			}
+		case jira.TemplateFieldDescription:
+			if params.Body == "" || field.Overwritable {
+				params.Body = substituted
+				params.BodyIsJiraMarkup = true
+			}
+		case jira.TemplateFieldLabels:
+			labels := strings.FieldsFunc(substituted, func(r rune) bool {
+				return r == ',' || r == '\n'
+			})
+			for i := range labels {
+				labels[i] = strings.TrimSpace(labels[i])
+			}
+			filtered := labels[:0]
+			for _, label := range labels {
+				if label != "" {
+					filtered = append(filtered, label)
+				}
+			}
+			params.Labels = mergeLabels(filtered, params.Labels)
+		}
+	}
+
+	return nil
+}
+
+func resolveIssueTypeID(issueType string) (string, error) {
+	availableTypes, ok := viper.Get("issue.types").([]any)
+	if !ok {
+		return "", fmt.Errorf("invalid issue types in config")
+	}
+
+	for _, availableType := range availableTypes {
+		typeMap, ok := availableType.(map[string]any)
+		if !ok {
+			continue
+		}
+
+		name, _ := typeMap["name"].(string)
+		handle, _ := typeMap["handle"].(string)
+		id, _ := typeMap["id"].(string)
+
+		if strings.EqualFold(issueType, handle) || strings.EqualFold(issueType, name) {
+			return id, nil
+		}
+	}
+
+	return "", fmt.Errorf("issue type %q not found in config", issueType)
+}
+
+func mergeLabels(templateLabels, userLabels []string) []string {
+	if len(templateLabels) == 0 {
+		return userLabels
+	}
+
+	merged := make([]string, 0, len(templateLabels)+len(userLabels))
+	seen := make(map[string]struct{}, len(templateLabels)+len(userLabels))
+
+	for _, label := range templateLabels {
+		if _, ok := seen[label]; ok {
+			continue
+		}
+		seen[label] = struct{}{}
+		merged = append(merged, label)
+	}
+	for _, label := range userLabels {
+		if _, ok := seen[label]; ok {
+			continue
+		}
+		seen[label] = struct{}{}
+		merged = append(merged, label)
+	}
+
+	return merged
+}
+
 type createCmd struct {
 	client     *jira.Client
 	issueTypes []*jira.IssueType
@@ -166,12 +294,12 @@ type createCmd struct {
 
 func (cc *createCmd) setIssueTypes() error {
 	issueTypes := make([]*jira.IssueType, 0)
-	availableTypes, ok := viper.Get("issue.types").([]interface{})
+	availableTypes, ok := viper.Get("issue.types").([]any)
 	if !ok {
 		return fmt.Errorf("invalid issue types in config")
 	}
 	for _, at := range availableTypes {
-		tp := at.(map[string]interface{})
+		tp := at.(map[string]any)
 		name := tp["name"].(string)
 		handle, _ := tp["handle"].(string)
 		if handle == jira.IssueTypeEpic || name == jira.IssueTypeEpic {
@@ -373,6 +501,12 @@ func parseFlags(flags query.FlagParser) *cmdcommon.CreateParams {
 	template, err := flags.GetString("template")
 	cmdutil.ExitIfError(err)
 
+	jiraTemplate, err := flags.GetString("jira-template")
+	cmdutil.ExitIfError(err)
+
+	templateVars, err := flags.GetStringToString("template-var")
+	cmdutil.ExitIfError(err)
+
 	noInput, err := flags.GetBool("no-input")
 	cmdutil.ExitIfError(err)
 
@@ -394,6 +528,8 @@ func parseFlags(flags query.FlagParser) *cmdcommon.CreateParams {
 		OriginalEstimate: originalEstimate,
 		CustomFields:     custom,
 		Template:         template,
+		JiraTemplate:     jiraTemplate,
+		TemplateVars:     templateVars,
 		NoInput:          noInput,
 		Debug:            debug,
 	}

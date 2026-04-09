@@ -178,3 +178,90 @@ func TestCreateEpicNextGen(t *testing.T) {
 	_, err = client.CreateV2(&requestData)
 	assert.Error(t, &ErrUnexpectedResponse{}, err)
 }
+
+func TestCreateWithJiraTemplate(t *testing.T) {
+	expectedBody := `{"update":{},"fields":{"project":{"key":"TEST"},"issuetype":{"name":"Story"},` +
+		`"summary":"SOS - Test","customfield_10203":"14866"}}`
+	testServer := createTestServer{code: 201}
+	server := testServer.serve(t, expectedBody)
+	defer server.Close()
+
+	client := NewClient(Config{Server: server.URL}, WithTimeout(3*time.Second))
+
+	requestData := CreateRequest{
+		Project:        "TEST",
+		IssueType:      "Story",
+		Summary:        "SOS - Test",
+		JiraTemplateID: "14866",
+	}
+	actual, err := client.CreateV2(&requestData)
+	assert.NoError(t, err)
+
+	expected := &CreateResponse{
+		ID:  "10057",
+		Key: "TEST-3",
+	}
+	assert.Equal(t, expected, actual)
+}
+
+func TestCreateWithJiraTemplateAndCustomFields(t *testing.T) {
+	expectedBody := `{"update":{},"fields":{"project":{"key":"TEST"},"issuetype":{"name":"Story"},` +
+		`"summary":"Test","customfield_10203":"14866","customfield_10002":3}}`
+	testServer := createTestServer{code: 201}
+	server := testServer.serve(t, expectedBody)
+	defer server.Close()
+
+	client := NewClient(Config{Server: server.URL}, WithTimeout(3*time.Second))
+
+	requestData := CreateRequest{
+		Project:        "TEST",
+		IssueType:      "Story",
+		Summary:        "Test",
+		JiraTemplateID: "14866",
+		CustomFields:   map[string]string{"story-points": "3"},
+	}
+	requestData.WithCustomFields([]IssueTypeField{
+		{
+			Key:  "customfield_10002",
+			Name: "Story Points",
+			Schema: struct {
+				DataType string `json:"type"`
+				Items    string `json:"items,omitempty"`
+			}{DataType: "number"},
+		},
+	})
+	actual, err := client.CreateV2(&requestData)
+	assert.NoError(t, err)
+
+	expected := &CreateResponse{
+		ID:  "10057",
+		Key: "TEST-3",
+	}
+	assert.Equal(t, expected, actual)
+}
+
+func TestCreateWithJiraMarkupDescription(t *testing.T) {
+	expectedBody := `{"update":{},"fields":{"project":{"key":"TEST"},"issuetype":{"name":"Story"},` +
+		`"summary":"SOS - Test","description":"h2. Checklist\n(x) done\n(/) accepted","customfield_10203":"14866"}}`
+	testServer := createTestServer{code: 201}
+	server := testServer.serve(t, expectedBody)
+	defer server.Close()
+
+	client := NewClient(Config{Server: server.URL}, WithTimeout(3*time.Second))
+
+	requestData := CreateRequest{
+		Project:        "TEST",
+		IssueType:      "Story",
+		Summary:        "SOS - Test",
+		Body:           JiraMarkup("h2. Checklist\n(x) done\n(/) accepted"),
+		JiraTemplateID: "14866",
+	}
+	actual, err := client.CreateV2(&requestData)
+	assert.NoError(t, err)
+
+	expected := &CreateResponse{
+		ID:  "10057",
+		Key: "TEST-3",
+	}
+	assert.Equal(t, expected, actual)
+}
