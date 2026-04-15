@@ -11,13 +11,17 @@ import (
 
 // NewCmdList is a list command.
 func NewCmdList() *cobra.Command {
-	return &cobra.Command{
+	cmd := &cobra.Command{
 		Use:     "list",
 		Short:   "List lists Jira projects",
 		Long:    "List lists Jira projects that a user has access to.",
 		Aliases: []string{"lists", "ls"},
 		Run:     List,
 	}
+
+	SetFlags(cmd)
+
+	return cmd
 }
 
 // List displays a list view.
@@ -42,7 +46,26 @@ func List(cmd *cobra.Command, _ []string) {
 		return
 	}
 
-	v := view.NewProject(projects)
+	plain, err := cmd.Flags().GetBool("plain")
+	cmdutil.ExitIfError(err)
+
+	noHeaders, err := cmd.Flags().GetBool("no-headers")
+	cmdutil.ExitIfError(err)
+
+	delimiter, err := cmd.Flags().GetString("delimiter")
+	cmdutil.ExitIfError(err)
+
+	v := view.NewProject(projects, view.WithProjectDisplay(view.DisplayFormat{
+		Plain:     plain,
+		NoHeaders: noHeaders,
+		Delimiter: delimiter,
+	}))
 
 	cmdutil.ExitIfError(v.Render())
+}
+
+func SetFlags(cmd *cobra.Command) {
+	cmd.Flags().Bool("plain", false, "Display output in plain mode")
+	cmd.Flags().Bool("no-headers", false, "Don't display table headers in plain mode. Works only with --plain")
+	cmd.Flags().String("delimiter", "\t", "Custom delimeter for columns in plain mode. Works only with --plain")
 }
