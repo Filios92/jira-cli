@@ -121,6 +121,7 @@ func (c *Client) create(req *CreateRequest, ver string) (*CreateResponse, error)
 	return &out, err
 }
 
+//nolint:gocyclo
 func (*Client) getRequestData(req *CreateRequest) *createRequest {
 	if req.Labels == nil {
 		req.Labels = []string{}
