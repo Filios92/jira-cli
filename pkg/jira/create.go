@@ -3,6 +3,7 @@ package jira
 import (
 	"context"
 	"encoding/json"
+	"maps"
 	"net/http"
 	"strconv"
 	"strings"
@@ -26,7 +27,7 @@ type CreateRequest struct {
 	// This can also be used to attach epic for next-gen project.
 	ParentIssueKey   string
 	Summary          string
-	Body             interface{} // string in v1/v2 and adf.ADF in v3
+	Body             any // string in v1/v2 and adf.ADF in v3
 	Reporter         string
 	Assignee         string
 	Priority         string
@@ -44,12 +45,15 @@ type CreateRequest struct {
 	SubtaskField string
 	// CustomFields holds all custom fields passed
 	// while creating an issue.
-	CustomFields map[string]string
+	CustomFields   map[string]string
+	JiraTemplateID string
 
 	projectType            string
 	installationType       string
 	configuredCustomFields []IssueTypeField
 }
+
+type JiraMarkup string
 
 // ForProjectType sets jira project type.
 func (cr *CreateRequest) ForProjectType(pt string) {
@@ -117,6 +121,7 @@ func (c *Client) create(req *CreateRequest, ver string) (*CreateResponse, error)
 	return &out, err
 }
 
+//nolint:gocyclo
 func (*Client) getRequestData(req *CreateRequest) *createRequest {
 	if req.Labels == nil {
 		req.Labels = []string{}
@@ -138,6 +143,8 @@ func (*Client) getRequestData(req *CreateRequest) *createRequest {
 	switch v := req.Body.(type) {
 	case string:
 		cf.Description = md.ToJiraMD(v)
+	case JiraMarkup:
+		cf.Description = string(v)
 	case *adf.ADF:
 		cf.Description = v
 	}
@@ -223,6 +230,12 @@ func (*Client) getRequestData(req *CreateRequest) *createRequest {
 	}
 
 	constructCustomFields(req.CustomFields, req.configuredCustomFields, &data)
+	if req.JiraTemplateID != "" {
+		if data.Fields.M.customFields == nil {
+			data.Fields.M.customFields = make(customField)
+		}
+		data.Fields.M.customFields["customfield_10203"] = req.JiraTemplateID
+	}
 
 	return &data
 }
@@ -294,7 +307,7 @@ type createFields struct {
 	} `json:"parent,omitempty"`
 	Name        string           `json:"name,omitempty"`
 	Summary     string           `json:"summary"`
-	Description interface{}      `json:"description,omitempty"`
+	Description any              `json:"description,omitempty"`
 	Reporter    *nameOrAccountID `json:"reporter,omitempty"`
 	Assignee    *nameOrAccountID `json:"assignee,omitempty"`
 	Priority    *struct {
@@ -328,11 +341,11 @@ func (cfm *createFieldsMarshaler) MarshalJSON() ([]byte, error) {
 		return m, err
 	}
 
-	var temp interface{}
+	var temp any
 	if err := json.Unmarshal(m, &temp); err != nil {
 		return nil, err
 	}
-	dm := temp.(map[string]interface{})
+	dm := temp.(map[string]any)
 
 	if epic, ok := dm["name"]; ok {
 		if cfm.M.epicField != "" {
@@ -341,9 +354,7 @@ func (cfm *createFieldsMarshaler) MarshalJSON() ([]byte, error) {
 		delete(dm, "name")
 	}
 
-	for key, val := range cfm.M.customFields {
-		dm[key] = val
-	}
+	maps.Copy(dm, cfm.M.customFields)
 
 	return json.Marshal(dm)
 }
