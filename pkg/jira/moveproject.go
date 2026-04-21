@@ -10,7 +10,10 @@ import (
 	"strings"
 )
 
-var moveProjectBrowsePattern = regexp.MustCompile(`/browse/([A-Z]+-\d+)`)
+var (
+	moveProjectBrowsePattern = regexp.MustCompile(`/browse/([A-Z]+-\d+)`)
+	moveProjectTitlePattern  = regexp.MustCompile(`\[([A-Z]+-\d+)\]`)
+)
 
 // MoveProjectParams holds parameters for moving an issue between projects.
 type MoveProjectParams struct {
@@ -168,17 +171,37 @@ func MoveProject(sc *SessionClient, client *Client, params MoveProjectParams) (*
 
 	stepFour := url.Values{}
 	stepFour.Set("id", issueInfo.ID)
-	_, finalURL, err := sc.PostForm("/secure/MoveIssueConfirm.jspa", stepFour)
+	stepFour.Set("confirm", "true")
+	stepFour.Set("Move", "Move")
+	body, finalURL, err := sc.PostForm("/secure/MoveIssueConfirm.jspa", stepFour)
 	if err != nil {
 		return nil, err
 	}
 
+	// Try extracting the new key from the redirect URL first.
 	match := moveProjectBrowsePattern.FindStringSubmatch(finalURL)
-	if len(match) != 2 {
-		return nil, fmt.Errorf("could not extract new issue key from redirect URL %q", finalURL)
+	if len(match) == 2 && match[1] != params.IssueKey {
+		result.NewKey = match[1]
+		return result, nil
 	}
 
-	result.NewKey = match[1]
+	// Fallback: find the new key in the page title [KEY-123] that differs from the original key.
+	for _, m := range moveProjectTitlePattern.FindAllStringSubmatch(body, -1) {
+		if len(m) == 2 && m[1] != issueInfo.Key {
+			result.NewKey = m[1]
+			return result, nil
+		}
+	}
+
+	// Last resort: find any /browse/KEY that differs from the original.
+	for _, m := range moveProjectBrowsePattern.FindAllStringSubmatch(body, -1) {
+		if len(m) == 2 && m[1] != issueInfo.Key {
+			result.NewKey = m[1]
+			return result, nil
+		}
+	}
+
+	return nil, fmt.Errorf("could not extract new issue key from response")
 
 	return result, nil
 }
