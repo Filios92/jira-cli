@@ -245,6 +245,20 @@ func (mc *moveCmd) setAvailableTransitions() error {
 func (mc *moveCmd) verifyTransition(it string) (*jira.Transition, error) {
 	var tr *jira.Transition
 
+	if len(mc.transitions) == 0 {
+		currentProject := mc.params.key
+		if parts := strings.SplitN(mc.params.key, "-", 2); len(parts) > 0 && parts[0] != "" {
+			currentProject = parts[0]
+		}
+
+		return nil, fmt.Errorf(
+			"issue %s has 0 available transitions (workflow may be broken).\n\nThis can happen when issues are created via REST API without proper template initialization.\nWorkaround: Move the issue to another project and back to re-initialize the workflow:\n  jira issue move-project %s JIRA\n  jira issue move-project JIRA-NNNN %s",
+			mc.params.key,
+			mc.params.key,
+			currentProject,
+		)
+	}
+
 	st := strings.ToLower(mc.params.state)
 	all := make([]string, 0, len(mc.transitions))
 	for _, t := range mc.transitions {
