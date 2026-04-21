@@ -32,6 +32,126 @@ type MoveProjectResult struct {
 	IssueType  string
 }
 
+type issueInfo struct {
+	ID     string `json:"id"`
+	Key    string `json:"key"`
+	Fields struct {
+		Project struct {
+			ID  string `json:"id"`
+			Key string `json:"key"`
+		} `json:"project"`
+		IssueType struct {
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"issuetype"`
+	} `json:"fields"`
+}
+
+type projectInfo struct {
+	ID         string `json:"id"`
+	Key        string `json:"key"`
+	IssueTypes []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	} `json:"issueTypes"`
+}
+
+func fetchIssueInfo(client *Client, issueKey string) (*issueInfo, error) {
+	issueResp, err := client.GetV2(context.Background(), "/issue/"+issueKey+"?fields=project,issuetype", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = issueResp.Body.Close() }()
+
+	issueBody, err := io.ReadAll(issueResp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var info issueInfo
+	if err := json.Unmarshal(issueBody, &info); err != nil {
+		return nil, fmt.Errorf("parse issue response: %w", err)
+	}
+
+	if strings.TrimSpace(info.ID) == "" {
+		return nil, fmt.Errorf("issue %q missing id", issueKey)
+	}
+	if strings.TrimSpace(info.Fields.Project.Key) == "" {
+		return nil, fmt.Errorf("issue %q missing project key", issueKey)
+	}
+	if strings.TrimSpace(info.Fields.IssueType.Name) == "" {
+		return nil, fmt.Errorf("issue %q missing issue type", issueKey)
+	}
+
+	return &info, nil
+}
+
+func fetchProjectInfo(client *Client, projectKey string) (*projectInfo, error) {
+	targetResp, err := client.GetV2(context.Background(), "/project/"+projectKey, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = targetResp.Body.Close() }()
+
+	targetBody, err := io.ReadAll(targetResp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var info projectInfo
+	if err := json.Unmarshal(targetBody, &info); err != nil {
+		return nil, fmt.Errorf("parse target project response: %w", err)
+	}
+
+	if strings.TrimSpace(info.ID) == "" {
+		return nil, fmt.Errorf("target project %q missing id", projectKey)
+	}
+	if strings.TrimSpace(info.Key) == "" {
+		return nil, fmt.Errorf("target project %q missing key", projectKey)
+	}
+
+	return &info, nil
+}
+
+func resolveTargetIssueType(issue *issueInfo, project *projectInfo, requestedType string) (string, string, error) {
+	issueTypeName := strings.TrimSpace(requestedType)
+	if issueTypeName == "" {
+		issueTypeName = issue.Fields.IssueType.Name
+	}
+
+	for _, targetIssueType := range project.IssueTypes {
+		if targetIssueType.Name == issueTypeName {
+			return issueTypeName, targetIssueType.ID, nil
+		}
+	}
+
+	return "", "", fmt.Errorf("issue type %q is not available in project %q", issueTypeName, project.Key)
+}
+
+func extractMovedIssueKey(result *MoveProjectResult, originalKey, finalURL, body string) bool {
+	match := moveProjectBrowsePattern.FindStringSubmatch(finalURL)
+	if len(match) == 2 && match[1] != originalKey {
+		result.NewKey = match[1]
+		return true
+	}
+
+	for _, m := range moveProjectTitlePattern.FindAllStringSubmatch(body, -1) {
+		if len(m) == 2 && m[1] != originalKey {
+			result.NewKey = m[1]
+			return true
+		}
+	}
+
+	for _, m := range moveProjectBrowsePattern.FindAllStringSubmatch(body, -1) {
+		if len(m) == 2 && m[1] != originalKey {
+			result.NewKey = m[1]
+			return true
+		}
+	}
+
+	return false
+}
+
 // MoveProject moves an issue from one Jira project to another using the legacy JSP workflow.
 func MoveProject(sc *SessionClient, client *Client, params MoveProjectParams) (*MoveProjectResult, error) {
 	if sc == nil {
@@ -47,97 +167,23 @@ func MoveProject(sc *SessionClient, client *Client, params MoveProjectParams) (*
 		return nil, fmt.Errorf("target project is required")
 	}
 
-	type issueResponse struct {
-		ID     string `json:"id"`
-		Key    string `json:"key"`
-		Fields struct {
-			Project struct {
-				ID  string `json:"id"`
-				Key string `json:"key"`
-			} `json:"project"`
-			IssueType struct {
-				ID   string `json:"id"`
-				Name string `json:"name"`
-			} `json:"issuetype"`
-		} `json:"fields"`
-	}
-
-	type projectResponse struct {
-		ID         string `json:"id"`
-		Key        string `json:"key"`
-		IssueTypes []struct {
-			ID   string `json:"id"`
-			Name string `json:"name"`
-		} `json:"issueTypes"`
-	}
-
-	issueResp, err := client.GetV2(context.Background(), "/issue/"+params.IssueKey+"?fields=project,issuetype", nil)
-	if err != nil {
-		return nil, err
-	}
-	defer issueResp.Body.Close()
-
-	issueBody, err := io.ReadAll(issueResp.Body)
+	issueInfo, err := fetchIssueInfo(client, params.IssueKey)
 	if err != nil {
 		return nil, err
 	}
 
-	var issueInfo issueResponse
-	if err := json.Unmarshal(issueBody, &issueInfo); err != nil {
-		return nil, fmt.Errorf("parse issue response: %w", err)
-	}
-
-	if strings.TrimSpace(issueInfo.ID) == "" {
-		return nil, fmt.Errorf("issue %q missing id", params.IssueKey)
-	}
-	if strings.TrimSpace(issueInfo.Fields.Project.Key) == "" {
-		return nil, fmt.Errorf("issue %q missing project key", params.IssueKey)
-	}
-	if strings.TrimSpace(issueInfo.Fields.IssueType.Name) == "" {
-		return nil, fmt.Errorf("issue %q missing issue type", params.IssueKey)
-	}
-
-	targetResp, err := client.GetV2(context.Background(), "/project/"+params.TargetProject, nil)
+	targetInfo, err := fetchProjectInfo(client, params.TargetProject)
 	if err != nil {
 		return nil, err
-	}
-	defer targetResp.Body.Close()
-
-	targetBody, err := io.ReadAll(targetResp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	var targetInfo projectResponse
-	if err := json.Unmarshal(targetBody, &targetInfo); err != nil {
-		return nil, fmt.Errorf("parse target project response: %w", err)
-	}
-
-	if strings.TrimSpace(targetInfo.ID) == "" {
-		return nil, fmt.Errorf("target project %q missing id", params.TargetProject)
-	}
-	if strings.TrimSpace(targetInfo.Key) == "" {
-		return nil, fmt.Errorf("target project %q missing key", params.TargetProject)
 	}
 
 	if strings.EqualFold(issueInfo.Fields.Project.Key, targetInfo.Key) {
 		return nil, fmt.Errorf("issue %q is already in project %q", params.IssueKey, targetInfo.Key)
 	}
 
-	issueTypeName := strings.TrimSpace(params.IssueType)
-	if issueTypeName == "" {
-		issueTypeName = issueInfo.Fields.IssueType.Name
-	}
-
-	issueTypeID := ""
-	for _, targetIssueType := range targetInfo.IssueTypes {
-		if targetIssueType.Name == issueTypeName {
-			issueTypeID = targetIssueType.ID
-			break
-		}
-	}
-	if issueTypeID == "" {
-		return nil, fmt.Errorf("issue type %q is not available in project %q", issueTypeName, targetInfo.Key)
+	issueTypeName, issueTypeID, err := resolveTargetIssueType(issueInfo, targetInfo, params.IssueType)
+	if err != nil {
+		return nil, err
 	}
 
 	result := &MoveProjectResult{
@@ -178,30 +224,9 @@ func MoveProject(sc *SessionClient, client *Client, params MoveProjectParams) (*
 		return nil, err
 	}
 
-	// Try extracting the new key from the redirect URL first.
-	match := moveProjectBrowsePattern.FindStringSubmatch(finalURL)
-	if len(match) == 2 && match[1] != params.IssueKey {
-		result.NewKey = match[1]
+	if extractMovedIssueKey(result, issueInfo.Key, finalURL, body) {
 		return result, nil
 	}
 
-	// Fallback: find the new key in the page title [KEY-123] that differs from the original key.
-	for _, m := range moveProjectTitlePattern.FindAllStringSubmatch(body, -1) {
-		if len(m) == 2 && m[1] != issueInfo.Key {
-			result.NewKey = m[1]
-			return result, nil
-		}
-	}
-
-	// Last resort: find any /browse/KEY that differs from the original.
-	for _, m := range moveProjectBrowsePattern.FindAllStringSubmatch(body, -1) {
-		if len(m) == 2 && m[1] != issueInfo.Key {
-			result.NewKey = m[1]
-			return result, nil
-		}
-	}
-
 	return nil, fmt.Errorf("could not extract new issue key from response")
-
-	return result, nil
 }

@@ -10,6 +10,8 @@ import (
 	"strings"
 )
 
+const maxRedirects = 10
+
 var atlTokenPattern = regexp.MustCompile(`name="atl_token"\s+value="([^"]+)"`)
 
 type SessionClient struct {
@@ -59,7 +61,7 @@ func (s *SessionClient) Get(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -96,8 +98,8 @@ func (s *SessionClient) PostForm(path string, data url.Values) (string, string, 
 	client := *s.client
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		finalURL = req.URL.String()
-		if len(via) >= 10 {
-			return fmt.Errorf("stopped after 10 redirects")
+		if len(via) >= maxRedirects {
+			return fmt.Errorf("stopped after %d redirects", maxRedirects)
 		}
 		return nil
 	}
@@ -106,7 +108,7 @@ func (s *SessionClient) PostForm(path string, data url.Values) (string, string, 
 	if err != nil {
 		return "", finalURL, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

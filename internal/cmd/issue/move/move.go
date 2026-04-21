@@ -252,7 +252,7 @@ func (mc *moveCmd) verifyTransition(it string) (*jira.Transition, error) {
 		}
 
 		return nil, fmt.Errorf(
-			"Issue %s has 0 available transitions (workflow may be broken).\n\nThis can happen when issues are created via REST API without proper template initialization.\nWorkaround: Move the issue to another project and back to re-initialize the workflow:\n  jira issue move-project %s JIRA\n  jira issue move-project JIRA-NNNN %s",
+			"issue %s has 0 available transitions (workflow may be broken).\n\nThis can happen when issues are created via REST API without proper template initialization.\nWorkaround: Move the issue to another project and back to re-initialize the workflow:\n  jira issue move-project %s JIRA\n  jira issue move-project JIRA-NNNN %s",
 			mc.params.key,
 			mc.params.key,
 			currentProject,
