@@ -2,6 +2,7 @@
 *.out
 *.swp
 /*.json
+!.releaserc.json
 
 .DS_Store
 .idea/

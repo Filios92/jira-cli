@@ -1,0 +1,52 @@
+{
+  "branches": ["main"],
+  "plugins": [
+    ["@semantic-release/commit-analyzer", {
+      "preset": "conventionalcommits",
+      "releaseRules": [
+        { "breaking": true, "release": "major" },
+        { "type": "break", "release": "major" },
+        { "type": "feat", "release": "minor" },
+        { "type": "fix", "release": "patch" },
+        { "type": "perf", "release": "patch" },
+        { "type": "revert", "release": "patch" },
+        { "type": "deps", "release": "patch" },
+        { "type": "refactor", "release": false },
+        { "type": "style", "release": false },
+        { "type": "docs", "release": false },
+        { "type": "build", "release": false },
+        { "type": "ci", "release": false },
+        { "type": "test", "release": false },
+        { "type": "chore", "release": false }
+      ]
+    }],
+    ["@semantic-release/release-notes-generator", {
+      "preset": "conventionalcommits",
+      "presetConfig": {
+        "types": [
+          { "type": "feat", "section": "Features" },
+          { "type": "fix", "section": "Bug Fixes" },
+          { "type": "perf", "section": "Performance" },
+          { "type": "revert", "section": "Reverts" },
+          { "type": "deps", "section": "Dependencies" },
+          { "type": "break", "section": "Breaking Changes" },
+          { "type": "refactor", "section": "Code Refactoring", "hidden": true },
+          { "type": "style", "section": "Styles", "hidden": true },
+          { "type": "docs", "section": "Documentation", "hidden": true },
+          { "type": "build", "section": "Build System", "hidden": true },
+          { "type": "ci", "section": "CI", "hidden": true },
+          { "type": "test", "section": "Tests", "hidden": true },
+          { "type": "chore", "section": "Miscellaneous", "hidden": true }
+        ]
+      }
+    }],
+    ["@semantic-release/changelog", {
+      "changelogFile": "CHANGELOG.md"
+    }],
+    "@semantic-release/github",
+    ["@semantic-release/git", {
+      "assets": ["CHANGELOG.md"],
+      "message": "chore(release): ${nextRelease.version} [skip ci]\n\n${nextRelease.notes}"
+    }]
+  ]
+}
