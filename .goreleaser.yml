@@ -5,7 +5,7 @@ release:
   prerelease: auto
   name_template: "v{{.Version}}"
   draft: false
-  mode: "keep-existing"
+  mode: "append"
 
 before:
   hooks:
