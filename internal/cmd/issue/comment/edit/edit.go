@@ -30,9 +30,9 @@ $ jira issue comment edit ISSUE-1 10042 --internal --no-input`
 // NewCmdCommentEdit is a comment edit command.
 func NewCmdCommentEdit() *cobra.Command {
 	cmd := cobra.Command{
-		Use:   "edit ISSUE-KEY COMMENT-ID",
-		Short: "Edit a comment on an issue",
-		Long:  helpText,
+		Use:     "edit ISSUE-KEY COMMENT-ID",
+		Short:   "Edit a comment on an issue",
+		Long:    helpText,
 		Example: examples,
 		Annotations: map[string]string{
 			"help:args": "ISSUE-KEY\tIssue key of the issue, eg: ISSUE-1\n" +
