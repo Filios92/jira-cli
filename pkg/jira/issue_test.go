@@ -554,6 +554,71 @@ func TestAddIssueComment(t *testing.T) {
 	assert.Error(t, &ErrUnexpectedResponse{}, err)
 }
 
+func TestGetIssueComment(t *testing.T) {
+	var notFound bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "GET", r.Method)
+		assert.Equal(t, "/rest/api/2/issue/TEST-1/comment/10042", r.URL.Path)
+		assert.Equal(t, "application/json", r.Header.Get("Accept"))
+
+		if notFound {
+			w.WriteHeader(404)
+			return
+		}
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte(`{"id":"10042","body":"existing comment text"}`))
+	}))
+	defer server.Close()
+
+	client := NewClient(Config{Server: server.URL}, WithTimeout(3*time.Second))
+
+	comment, err := client.GetIssueComment("TEST-1", "10042")
+	assert.NoError(t, err)
+	assert.Equal(t, "10042", comment.ID)
+	assert.Equal(t, "existing comment text", comment.Body)
+
+	notFound = true
+
+	comment, err = client.GetIssueComment("TEST-1", "10042")
+	assert.Nil(t, comment)
+	assert.Error(t, err)
+}
+
+func TestUpdateIssueComment(t *testing.T) {
+	var unexpectedStatusCode bool
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "PUT", r.Method)
+		assert.Equal(t, "/rest/api/2/issue/TEST-1/comment/10042", r.URL.Path)
+		assert.Equal(t, "application/json", r.Header.Get("Accept"))
+		assert.Equal(t, "application/json", r.Header.Get("Content-Type"))
+
+		actualBody := new(strings.Builder)
+		_, _ = io.Copy(actualBody, r.Body)
+
+		expectedBody := `{"body":"updated comment","properties":[{"key":"sd.public.comment","value":{"internal":false}}]}`
+		assert.Equal(t, expectedBody, actualBody.String())
+
+		if unexpectedStatusCode {
+			w.WriteHeader(400)
+		} else {
+			w.WriteHeader(200)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient(Config{Server: server.URL}, WithTimeout(3*time.Second))
+
+	err := client.UpdateIssueComment("TEST-1", "10042", "updated comment", false)
+	assert.NoError(t, err)
+
+	unexpectedStatusCode = true
+
+	err = client.UpdateIssueComment("TEST-1", "10042", "updated comment", false)
+	assert.Error(t, &ErrUnexpectedResponse{}, err)
+}
+
 func TestAddIssueWorklog(t *testing.T) {
 	var unexpectedStatusCode bool
 

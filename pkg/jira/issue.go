@@ -341,6 +341,66 @@ type issueWorklogRequest struct {
 	Comment   string `json:"comment"`
 }
 
+// IssueComment holds data for a single Jira issue comment (v2 API).
+type IssueComment struct {
+	ID   string `json:"id"`
+	Body string `json:"body"`
+}
+
+// GetIssueComment fetches a single comment using GET /issue/{key}/comment/{commentID}.
+func (c *Client) GetIssueComment(key, commentID string) (*IssueComment, error) {
+	path := fmt.Sprintf("/issue/%s/comment/%s", key, commentID)
+	res, err := c.GetV2(context.Background(), path, Header{
+		"Accept": "application/json",
+	})
+	if err != nil {
+		return nil, err
+	}
+	if res == nil {
+		return nil, ErrEmptyResponse
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		return nil, formatUnexpectedResponse(res)
+	}
+
+	var comment IssueComment
+	if err := json.NewDecoder(res.Body).Decode(&comment); err != nil {
+		return nil, err
+	}
+	return &comment, nil
+}
+
+// UpdateIssueComment updates a comment using PUT /issue/{key}/comment/{commentID}.
+func (c *Client) UpdateIssueComment(key, commentID, comment string, internal bool) error {
+	body, err := json.Marshal(&issueCommentRequest{
+		Body:       md.ToJiraMD(comment),
+		Properties: []issueCommentProperty{{Key: "sd.public.comment", Value: issueCommentPropertyValue{Internal: internal}}},
+	})
+	if err != nil {
+		return err
+	}
+
+	path := fmt.Sprintf("/issue/%s/comment/%s", key, commentID)
+	res, err := c.PutV2(context.Background(), path, body, Header{
+		"Accept":       "application/json",
+		"Content-Type": "application/json",
+	})
+	if err != nil {
+		return err
+	}
+	if res == nil {
+		return ErrEmptyResponse
+	}
+	defer func() { _ = res.Body.Close() }()
+
+	if res.StatusCode != http.StatusOK {
+		return formatUnexpectedResponse(res)
+	}
+	return nil
+}
+
 // AddIssueWorklog adds worklog to an issue using POST /issue/{key}/worklog endpoint.
 // Leave param `started` empty to use the server's current datetime as start date.
 func (c *Client) AddIssueWorklog(key, started, timeSpent, comment, newEstimate string) error {
