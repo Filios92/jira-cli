@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/ankitpokhrel/jira-cli/internal/cmd/issue/comment/add"
+	"github.com/ankitpokhrel/jira-cli/internal/cmd/issue/comment/edit"
 )
 
 const helpText = `Comment command helps you manage issue comments. See available commands below.`
@@ -19,6 +20,7 @@ func NewCmdComment() *cobra.Command {
 	}
 
 	cmd.AddCommand(add.NewCmdCommentAdd())
+	cmd.AddCommand(edit.NewCmdCommentEdit())
 
 	return &cmd
 }
