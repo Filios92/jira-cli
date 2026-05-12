@@ -1,3 +1,9 @@
+## [1.8.1](https://github.com/hackerh3/jira-cli/compare/1.8.0...1.8.1) (2026-05-12)
+
+### Bug Fixes
+
+* **ci:** flatten archive layout and build all platforms ([5cf0eca](https://github.com/hackerh3/jira-cli/commit/5cf0ecab63fc9b70358ae0f7c99bd4b9d6eac2a2))
+
 # Changelog
 
 All notable changes to the hackerh3/jira-cli fork are documented here.
