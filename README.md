@@ -1,9 +1,11 @@
 <div align="center">
-    <a href="#">
-        <img alt="stargazers over time" src="https://stars.medv.io/ankitpokhrel/jira-cli.svg" />
-    </a>
-    <h1 align="center">JiraCLI</h1>
+    <h1 align="center">JiraCLI (hackerh3 fork)</h1>
 </div>
+
+> **Fork notice** — This is a maintained fork of [ankitpokhrel/jira-cli](https://github.com/ankitpokhrel/jira-cli).
+> It adds move-project, comment editing, Deviniti template support, and broken-workflow detection.
+> Releases use versionless tags (`1.8.0`) to avoid collision with upstream (`v1.8.0`).
+> Install from **this repo's** [releases page](https://github.com/hackerh3/jira-cli/releases).
 
 <div>
     <p align="center">
@@ -69,19 +71,19 @@ nature of the data. Yet, we've attempted to make the experience as similar as po
 | **Jira**  | <a href="#"><img alt="Jira Cloud" src="https://img.shields.io/badge/Jira Cloud-%E2%9C%93-dark--green?logo=jira&style=flat-square" /></a><a href="#"><img alt="Jira Server" src="https://img.shields.io/badge/Jira Server-%E2%9C%93-dark--green?logo=jira&style=flat-square" /></a> |
 
 ## Installation
-`jira-cli` is available as a downloadable packaged binary for Linux, macOS, and Windows from the [releases page](https://github.com/ankitpokhrel/jira-cli/releases).
+`jira-cli` is available as a downloadable binary for Linux, macOS, and Windows from the [releases page](https://github.com/hackerh3/jira-cli/releases).
 
-You can use Docker to quickly try out `jira-cli`.
+> [!WARNING]
+> Do **not** install via `brew install jira-cli` or the upstream releases page — those ship the
+> upstream binary without fork features. Use the link above or `go install` from this repo.
+
+You can also build from source:
 
 ```sh
-docker run -it --rm ghcr.io/ankitpokhrel/jira-cli:latest
+# Build from this fork
+git clone https://github.com/hackerh3/jira-cli.git && cd jira-cli
+make deps install
 ```
-
-Follow the [installation guide](https://github.com/ankitpokhrel/jira-cli/wiki/Installation) for other installation methods like `Homebrew`, `Nix`, etc.
-
-<a href="https://repology.org/project/jira-cli-go/versions">
-    <img src="https://repology.org/badge/vertical-allrepos/jira-cli-go.svg" alt="Packaging status">
-</a>
 
 ## Getting started
 
@@ -807,7 +809,7 @@ Please [open a discussion](https://github.com/ankitpokhrel/jira-cli/discussions/
 ## Development
 1. Clone the repo.
    ```sh
-   git clone git@github.com:ankitpokhrel/jira-cli.git
+   git clone git@github.com:hackerh3/jira-cli.git
    ```
 
 2. Optional: If you want to run a Jira instance locally, you can use the following make recipe.
