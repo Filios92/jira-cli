@@ -3,7 +3,7 @@ project_name: jira
 
 release:
   prerelease: auto
-  name_template: "v{{.Version}}"
+  name_template: "{{.Version}}"
   draft: false
   mode: "append"
 
