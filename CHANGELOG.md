@@ -1,3 +1,13 @@
+## [1.11.0](https://github.com/hackerh3/jira-cli/compare/1.10.0...1.11.0) (2026-05-13)
+
+### Features
+
+* **cmd:** warn on duplicate subtask type during issue creation ([#12](https://github.com/hackerh3/jira-cli/issues/12)) ([79a0dc2](https://github.com/hackerh3/jira-cli/commit/79a0dc251ee512bcb150367ddfc028cdbe8ef633))
+
+### Bug Fixes
+
+* **comment:** move markdown conversion to command layer, add --raw flag ([#14](https://github.com/hackerh3/jira-cli/issues/14)) ([e34a03e](https://github.com/hackerh3/jira-cli/commit/e34a03ec0b17dfca882cfe3fcbc619508de9f51f)), closes [#13](https://github.com/hackerh3/jira-cli/issues/13)
+
 ## [1.10.0](https://github.com/hackerh3/jira-cli/compare/1.9.0...1.10.0) (2026-05-13)
 
 ### Features
