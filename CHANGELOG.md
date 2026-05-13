@@ -1,3 +1,9 @@
+## [1.9.0](https://github.com/hackerh3/jira-cli/compare/1.8.1...1.9.0) (2026-05-13)
+
+### Features
+
+* **cmd:** add epic tree command ([#11](https://github.com/hackerh3/jira-cli/issues/11)) ([a589007](https://github.com/hackerh3/jira-cli/commit/a589007d085b9962af41d4849fc24ce81fe39648))
+
 ## [1.8.1](https://github.com/hackerh3/jira-cli/compare/1.8.0...1.8.1) (2026-05-12)
 
 ### Bug Fixes
