@@ -1,3 +1,9 @@
+## [1.10.0](https://github.com/hackerh3/jira-cli/compare/1.9.0...1.10.0) (2026-05-13)
+
+### Features
+
+* **view:** add --compact flag for LLM-friendly output ([#15](https://github.com/hackerh3/jira-cli/issues/15)) ([7cb397f](https://github.com/hackerh3/jira-cli/commit/7cb397f1efc100bd935e502e5baf2e37fc5e2e9a)), closes [#6](https://github.com/hackerh3/jira-cli/issues/6)
+
 ## [1.9.0](https://github.com/hackerh3/jira-cli/compare/1.8.1...1.9.0) (2026-05-13)
 
 ### Features
