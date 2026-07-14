@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/viper"
 
 	"github.com/ankitpokhrel/jira-cli/api"
+	"github.com/ankitpokhrel/jira-cli/internal/cmdcommon"
 	"github.com/ankitpokhrel/jira-cli/internal/cmdutil"
 	"github.com/ankitpokhrel/jira-cli/internal/query"
 	"github.com/ankitpokhrel/jira-cli/internal/view"
@@ -47,6 +48,9 @@ $ jira issue list --plain --no-headers
 
 # List some columns of the issue in a plain table view
 $ jira issue list --plain --columns key,assignee,status
+
+# List issues with custom field columns
+$ jira issue list --plain --columns key,summary,"Epic Link"
 
 # List issues in a plain table view and show all fields
 $ jira issue list --plain --no-truncate
@@ -114,15 +118,19 @@ func loadList(cmd *cobra.Command, args []string) {
 		s := cmdutil.Info("Fetching issues...")
 		defer s.Stop()
 
-		q, err := query.NewIssue(project, cmd.Flags())
+		issueQuery, err := query.NewIssue(project, cmd.Flags())
 		if err != nil {
 			return nil, err
 		}
 
-		resp, err := api.ProxySearch(api.DefaultClient(debug), q.Get(), q.Params().From, q.Params().Limit)
+		client := api.DefaultClient(debug)
+		resp, err := api.ProxySearch(client, issueQuery.Get(), issueQuery.Params().From, issueQuery.Params().Limit)
 		if err != nil {
 			return nil, err
 		}
+
+		projectCustomFields, _ := cmdcommon.GetProjectCustomFieldsForQuery(client, project, issueQuery.Params().JQL)
+		cmdcommon.FilterIssuesCustomFields(resp.Issues, projectCustomFields)
 
 		return resp.Issues, nil
 	}()
@@ -133,6 +141,9 @@ func loadList(cmd *cobra.Command, args []string) {
 		cmdutil.Failed("No result found for given query in project %q", project)
 		return
 	}
+
+	jqlFlag, err := cmd.Flags().GetString("jql")
+	cmdutil.ExitIfError(err)
 
 	raw, err := cmd.Flags().GetBool("raw")
 	cmdutil.ExitIfError(err)
@@ -166,6 +177,8 @@ func loadList(cmd *cobra.Command, args []string) {
 	columns, err := cmd.Flags().GetString("columns")
 	cmdutil.ExitIfError(err)
 
+	projectCustomFields, _ := cmdcommon.GetProjectCustomFieldsForQuery(api.DefaultClient(debug), project, jqlFlag)
+
 	var comments uint
 	if cmd.Flags().Changed("comments") {
 		comments, err = cmd.Flags().GetUint("comments")
@@ -175,9 +188,10 @@ func loadList(cmd *cobra.Command, args []string) {
 	}
 
 	v := view.IssueList{
-		Project: project,
-		Server:  server,
-		Data:    issues,
+		Project:      project,
+		Server:       server,
+		Data:         issues,
+		CustomFields: projectCustomFields,
 		Refresh: func() {
 			loadList(cmd, args)
 		},
@@ -255,7 +269,8 @@ func SetFlags(cmd *cobra.Command) {
 
 	if cmd.HasParent() && cmd.Parent().Name() != "sprint" {
 		cmd.Flags().String("columns", "", "Comma separated list of columns to display in the plain mode.\n"+
-			fmt.Sprintf("Accepts: %s", strings.Join(view.ValidIssueColumns(), ", ")))
+			fmt.Sprintf("Accepts: %s, plus project custom field names (e.g. 'Epic Link')",
+				strings.Join(view.ValidIssueColumns(), ", ")))
 		cmd.Flags().Uint("fixed-columns", 1, "Number of fixed columns in the interactive mode")
 	}
 }

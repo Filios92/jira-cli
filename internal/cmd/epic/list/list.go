@@ -9,6 +9,7 @@ import (
 
 	"github.com/ankitpokhrel/jira-cli/api"
 	"github.com/ankitpokhrel/jira-cli/internal/cmd/issue/list"
+	"github.com/ankitpokhrel/jira-cli/internal/cmdcommon"
 	"github.com/ankitpokhrel/jira-cli/internal/cmdutil"
 	"github.com/ankitpokhrel/jira-cli/internal/query"
 	"github.com/ankitpokhrel/jira-cli/internal/view"
@@ -114,6 +115,10 @@ func singleEpicView(flags query.FlagParser, key, project, projectType, server st
 		if err != nil {
 			return nil, err
 		}
+
+		projectCustomFields, _ := cmdcommon.GetProjectCustomFields(client, project)
+		cmdcommon.FilterIssuesCustomFields(resp.Issues, projectCustomFields)
+
 		return resp.Issues, nil
 	}()
 	cmdutil.ExitIfError(err)
@@ -145,10 +150,13 @@ func singleEpicView(flags query.FlagParser, key, project, projectType, server st
 	columns, err := flags.GetString("columns")
 	cmdutil.ExitIfError(err)
 
+	projectCustomFields, _ := cmdcommon.GetProjectCustomFields(client, project)
+
 	v := view.IssueList{
-		Project: project,
-		Server:  server,
-		Data:    issues,
+		Project:      project,
+		Server:       server,
+		Data:         issues,
+		CustomFields: projectCustomFields,
 		Refresh: func() {
 			singleEpicView(flags, key, project, projectType, server, client)
 		},

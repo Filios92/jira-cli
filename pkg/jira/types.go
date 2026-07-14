@@ -126,6 +126,9 @@ type IssueFields struct {
 	} `json:"issueLinks"`
 	Created string `json:"created"`
 	Updated string `json:"updated"`
+
+	// CustomFields holds raw custom field values keyed by field id (e.g. customfield_10001).
+	CustomFields map[string]json.RawMessage `json:"-"`
 }
 
 // Field holds field info.

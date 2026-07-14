@@ -186,6 +186,15 @@ func ProxyUserSearch(c *jira.Client, opts *jira.UserSearchOptions) ([]*jira.User
 	return users, err
 }
 
+// ProxyGetProjectCustomFields returns custom fields configured on the project's create screens.
+func ProxyGetProjectCustomFields(c *jira.Client, projectKey string) ([]jira.IssueTypeField, error) {
+	installation := viper.GetString("installation")
+	major := viper.GetInt("version.major")
+	minor := viper.GetInt("version.minor")
+
+	return c.ProjectCustomFields(projectKey, installation, major, minor)
+}
+
 // ProxyTransitions uses either v2 or v3 version of the GET /issue/{key}/transitions
 // endpoint to fetch valid transitions for an issue.
 // Defaults to v3 if installation type is not defined in the config.

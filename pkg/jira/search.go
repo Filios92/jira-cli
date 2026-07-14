@@ -23,7 +23,7 @@ func (c *Client) Search(jql string, limit uint) (*SearchResult, error) {
 
 // SearchV2 searches an issues using v2 version of the Jira GET /search endpoint.
 func (c *Client) SearchV2(jql string, from, limit uint) (*SearchResult, error) {
-	path := fmt.Sprintf("/search?jql=%s&startAt=%d&maxResults=%d", url.QueryEscape(jql), from, limit)
+	path := fmt.Sprintf("/search?jql=%s&startAt=%d&maxResults=%d&fields=*all", url.QueryEscape(jql), from, limit)
 	return c.search(path, apiVersion2)
 }
 

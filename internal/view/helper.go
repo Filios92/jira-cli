@@ -18,6 +18,7 @@ import (
 
 	"github.com/ankitpokhrel/jira-cli/internal/cmdutil"
 	"github.com/ankitpokhrel/jira-cli/pkg/browser"
+	"github.com/ankitpokhrel/jira-cli/pkg/jira"
 	"github.com/ankitpokhrel/jira-cli/pkg/tui"
 )
 
@@ -75,6 +76,20 @@ func ValidIssueColumns() []string {
 		fieldUpdated,
 		fieldLabels,
 	}
+}
+
+// CustomFieldColumnName returns the display column name for a custom field.
+func CustomFieldColumnName(name string) string {
+	return strings.ToUpper(strings.TrimSpace(name))
+}
+
+// ValidIssueColumnsWithCustom returns valid columns including project custom fields.
+func ValidIssueColumnsWithCustom(custom []jira.IssueTypeField) []string {
+	columns := ValidIssueColumns()
+	for _, cf := range custom {
+		columns = append(columns, CustomFieldColumnName(cf.Name))
+	}
+	return columns
 }
 
 // ValidSprintColumns returns valid columns for sprint list.

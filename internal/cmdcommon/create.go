@@ -236,6 +236,33 @@ func GetUserKeyForConfiguredInstallation(user *jira.User) string {
 	return user.AccountID
 }
 
+// GetProjectCustomFields returns custom fields used by the configured project.
+func GetProjectCustomFields(client *jira.Client, projectKey string) ([]jira.IssueTypeField, error) {
+	if client == nil {
+		return nil, nil
+	}
+	return api.ProxyGetProjectCustomFields(client, projectKey)
+}
+
+// GetProjectCustomFieldsForQuery returns custom fields for the project referenced in JQL,
+// falling back to the configured project key when the query has no project clause.
+func GetProjectCustomFieldsForQuery(client *jira.Client, defaultProject, jql string) ([]jira.IssueTypeField, error) {
+	projectKey := defaultProject
+	if parsed := jira.ParseProjectFromJQL(jql); parsed != "" {
+		if resolved, err := client.ResolveProjectKey(parsed); err == nil && resolved != "" {
+			projectKey = resolved
+		}
+	}
+	return GetProjectCustomFields(client, projectKey)
+}
+
+// FilterIssuesCustomFields keeps only project custom fields on each issue.
+func FilterIssuesCustomFields(issues []*jira.Issue, allowed []jira.IssueTypeField) {
+	for _, iss := range issues {
+		iss.Fields.CustomFields = jira.FilterCustomFields(iss.Fields.CustomFields, allowed)
+	}
+}
+
 // GetConfiguredCustomFields returns the custom fields configured by the user.
 func GetConfiguredCustomFields() ([]jira.IssueTypeField, error) {
 	var configuredFields []jira.IssueTypeField

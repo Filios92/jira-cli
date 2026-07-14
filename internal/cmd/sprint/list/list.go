@@ -11,6 +11,7 @@ import (
 
 	"github.com/ankitpokhrel/jira-cli/api"
 	"github.com/ankitpokhrel/jira-cli/internal/cmd/issue/list"
+	"github.com/ankitpokhrel/jira-cli/internal/cmdcommon"
 	"github.com/ankitpokhrel/jira-cli/internal/cmdutil"
 	"github.com/ankitpokhrel/jira-cli/internal/query"
 	"github.com/ankitpokhrel/jira-cli/internal/view"
@@ -108,6 +109,10 @@ func singleSprintView(sprintQuery *query.Sprint, flags query.FlagParser, boardID
 		if err != nil {
 			return nil, err
 		}
+
+		projectCustomFields, _ := cmdcommon.GetProjectCustomFields(client, project)
+		cmdcommon.FilterIssuesCustomFields(resp.Issues, projectCustomFields)
+
 		return resp.Issues, nil
 	}()
 	cmdutil.ExitIfError(err)
@@ -139,6 +144,8 @@ func singleSprintView(sprintQuery *query.Sprint, flags query.FlagParser, boardID
 	columns, err := flags.GetString("columns")
 	cmdutil.ExitIfError(err)
 
+	projectCustomFields, _ := cmdcommon.GetProjectCustomFields(client, project)
+
 	var ft string
 	if sprint != nil {
 		if sprint.Status == jira.SprintStateFuture {
@@ -162,10 +169,11 @@ func singleSprintView(sprintQuery *query.Sprint, flags query.FlagParser, boardID
 	}
 
 	v := view.IssueList{
-		Project:    project,
-		Server:     server,
-		Data:       issues,
-		FooterText: ft,
+		Project:      project,
+		Server:       server,
+		Data:         issues,
+		CustomFields: projectCustomFields,
+		FooterText:   ft,
 		Refresh: func() {
 			singleSprintView(sprintQuery, flags, boardID, sprintID, project, server, client, nil)
 		},
@@ -284,7 +292,8 @@ func setFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool("table", false, "Display sprints in a table view")
 	cmd.Flags().String("columns", "", "Comma separated list of columns to display in the plain mode.\n"+
 		fmt.Sprintf("Accepts (for sprint list): %s", strings.Join(view.ValidSprintColumns(), ", "))+
-		fmt.Sprintf("\nAccepts (for sprint issues): %s", strings.Join(view.ValidIssueColumns(), ", ")))
+		fmt.Sprintf("\nAccepts (for sprint issues): %s, plus project custom field names (e.g. 'Epic Link')",
+			strings.Join(view.ValidIssueColumns(), ", ")))
 	cmd.Flags().Uint("fixed-columns", 1, "Number of fixed columns in the interactive mode")
 	cmd.Flags().Bool("current", false, "List issues in current active sprint")
 	cmd.Flags().Bool("prev", false, "List issues in previous sprint")

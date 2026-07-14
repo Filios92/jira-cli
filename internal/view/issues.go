@@ -30,12 +30,13 @@ type DisplayFormat struct {
 
 // IssueList is a list view for issues.
 type IssueList struct {
-	Project    string
-	Server     string
-	Data       []*jira.Issue
-	Display    DisplayFormat
-	Refresh    tui.RefreshFunc
-	FooterText string
+	Project      string
+	Server       string
+	Data         []*jira.Issue
+	Display      DisplayFormat
+	CustomFields []jira.IssueTypeField
+	Refresh      tui.RefreshFunc
+	FooterText   string
 }
 
 // Render renders the view.
@@ -151,7 +152,7 @@ func (l *IssueList) renderCSV(w io.Writer) error {
 }
 
 // renderCompact renders issues in a compact LLM-friendly format.
-// Only essential fields are included to minimize token usage.
+// Essential fields and project custom fields are included to minimize token usage.
 func (l *IssueList) renderCompact(w io.Writer) error {
 	var s strings.Builder
 
@@ -173,18 +174,28 @@ func (l *IssueList) renderCompact(w io.Writer) error {
 		if iss.Fields.Parent != nil && iss.Fields.Parent.Key != "" {
 			fmt.Fprintf(&s, "Parent: %s\n", iss.Fields.Parent.Key)
 		}
+		for _, cf := range l.CustomFields {
+			value := l.customFieldValue(CustomFieldColumnName(cf.Name), iss)
+			fmt.Fprintf(&s, "%s: %s\n", cf.Name, value)
+		}
 	}
 
 	_, err := fmt.Fprint(w, s.String())
 	return err
 }
 
-func (*IssueList) validColumnsMap() map[string]struct{} {
-	columns := ValidIssueColumns()
+func (l *IssueList) validColumnsMap() map[string]struct{} {
+	columns := ValidIssueColumnsWithCustom(l.CustomFields)
 	out := make(map[string]struct{}, len(columns))
 
 	for _, c := range columns {
 		out[c] = struct{}{}
+	}
+
+	for _, cf := range l.CustomFields {
+		out[CustomFieldColumnName(cf.Name)] = struct{}{}
+		out[strings.ToUpper(jira.FieldIdentifier(cf.Name))] = struct{}{}
+		out[strings.ToUpper(cf.Key)] = struct{}{}
 	}
 
 	return out
@@ -206,9 +217,9 @@ func (l *IssueList) header() []string {
 
 	columnsMap := l.validColumnsMap()
 	for _, c := range l.Display.Columns {
-		c = strings.ToUpper(c)
+		c = strings.ToUpper(strings.TrimSpace(c))
 		if _, ok := columnsMap[c]; ok {
-			headers = append(headers, strings.ToUpper(c))
+			headers = append(headers, l.columnHeader(c))
 		}
 		if c == fieldKey {
 			hasKeyCol = true
@@ -265,8 +276,48 @@ func (l *IssueList) assignColumns(columns []string, issue *jira.Issue) []string 
 			bucket = append(bucket, formatDateTime(issue.Fields.Updated, jira.RFC3339, l.Display.Timezone))
 		case fieldLabels:
 			bucket = append(bucket, strings.Join(issue.Fields.Labels, ","))
+		default:
+			bucket = append(bucket, l.customFieldValue(column, issue))
 		}
 	}
 
 	return bucket
+}
+
+func (l *IssueList) columnHeader(column string) string {
+	for _, cf := range l.CustomFields {
+		if CustomFieldColumnName(cf.Name) == column ||
+			strings.ToUpper(jira.FieldIdentifier(cf.Name)) == column ||
+			strings.ToUpper(cf.Key) == column {
+			return CustomFieldColumnName(cf.Name)
+		}
+	}
+	return column
+}
+
+func (l *IssueList) customFieldValue(column string, issue *jira.Issue) string {
+	fieldKey := l.customFieldKey(column)
+	if fieldKey == "" {
+		return ""
+	}
+
+	raw, ok := issue.Fields.CustomFields[fieldKey]
+	if !ok {
+		return ""
+	}
+
+	return jira.FormatFieldValue(raw)
+}
+
+func (l *IssueList) customFieldKey(column string) string {
+	column = strings.ToUpper(strings.TrimSpace(column))
+	for _, cf := range l.CustomFields {
+		if CustomFieldColumnName(cf.Name) == column ||
+			strings.ToUpper(jira.FieldIdentifier(cf.Name)) == column ||
+			strings.ToUpper(cf.Key) == column {
+			return cf.Key
+		}
+	}
+
+	return ""
 }
