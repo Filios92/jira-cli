@@ -221,6 +221,88 @@ func TestIssueRenderInCompactViewWithCustomFields(t *testing.T) {
 	assert.Contains(t, out, "Text 1: \n")
 }
 
+func TestIssueRenderInCompactViewWithColumns(t *testing.T) {
+	var b bytes.Buffer
+
+	data := getIssues()
+	data[0].Fields.CustomFields = map[string]json.RawMessage{
+		"customfield_10111": json.RawMessage(`5`),
+	}
+
+	issue := IssueList{
+		Project: "TEST",
+		Server:  "https://test.local",
+		Data:    data,
+		CustomFields: []jira.IssueTypeField{
+			{Name: "Story Points", Key: "customfield_10111"},
+		},
+		Display: DisplayFormat{
+			Compact: true,
+			Columns: []string{"key", "status", "Story Points"},
+		},
+	}
+	assert.NoError(t, issue.renderCompact(&b))
+
+	expected := `Key: TEST-1
+Status: Done
+Story Points: 5
+
+Key: TEST-2
+Status: Open
+Story Points: 
+`
+	assert.Equal(t, expected, b.String())
+}
+
+func TestIssueRenderRawJSONWithColumns(t *testing.T) {
+	var b bytes.Buffer
+
+	data := getIssues()
+	data[0].Fields.CustomFields = map[string]json.RawMessage{
+		"customfield_10111": json.RawMessage(`5`),
+	}
+
+	issue := IssueList{
+		Data: data,
+		CustomFields: []jira.IssueTypeField{
+			{Name: "Story Points", Key: "customfield_10111"},
+		},
+		Display: DisplayFormat{
+			Columns: []string{"key", "status", "Story Points"},
+		},
+	}
+	assert.NoError(t, issue.RenderRaw(&b))
+
+	expected := `[
+  {
+    "Key": "TEST-1",
+    "Status": "Done",
+    "Story Points": "5"
+  },
+  {
+    "Key": "TEST-2",
+    "Status": "Open",
+    "Story Points": ""
+  }
+]
+`
+	assert.Equal(t, expected, b.String())
+}
+
+func TestIssueRenderRawJSONWithoutColumns(t *testing.T) {
+	var b bytes.Buffer
+
+	issue := IssueList{
+		Data: getIssues(),
+	}
+	assert.NoError(t, issue.RenderRaw(&b))
+
+	var out []map[string]any
+	assert.NoError(t, json.Unmarshal(bytes.TrimSpace(b.Bytes()), &out))
+	assert.Len(t, out, 2)
+	assert.Equal(t, "TEST-1", out[0]["key"])
+}
+
 func TestIssueRenderInPlainViewWithCustomFieldColumn(t *testing.T) {
 	var b bytes.Buffer
 

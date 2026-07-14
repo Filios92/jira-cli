@@ -1,6 +1,7 @@
 package view
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -151,8 +152,44 @@ func (l *IssueList) renderCSV(w io.Writer) error {
 	return renderCSV(w, l.data())
 }
 
+// RenderRaw renders issues as JSON. When --columns is set, only those columns are included.
+func (l *IssueList) RenderRaw(w io.Writer) error {
+	data := l.rawJSONData()
+
+	encoded, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	_, err = fmt.Fprintln(w, string(encoded))
+	return err
+}
+
+func (l *IssueList) rawJSONData() any {
+	if len(l.Display.Columns) == 0 {
+		return l.Data
+	}
+
+	headers := l.resolveColumns(false)
+	out := make([]map[string]string, 0, len(l.Data))
+
+	for _, iss := range l.Data {
+		values := l.assignColumns(headers, iss)
+		row := make(map[string]string, len(headers))
+
+		for i, column := range headers {
+			row[l.compactColumnLabel(column)] = values[i]
+		}
+
+		out = append(out, row)
+	}
+
+	return out
+}
+
 // renderCompact renders issues in a compact LLM-friendly format.
-// Essential fields and project custom fields are included to minimize token usage.
+// When --columns is set, only those columns are shown. Otherwise essential fields
+// and project custom fields are included to minimize token usage.
 func (l *IssueList) renderCompact(w io.Writer) error {
 	var s strings.Builder
 
@@ -160,28 +197,82 @@ func (l *IssueList) renderCompact(w io.Writer) error {
 		if idx > 0 {
 			s.WriteString("\n")
 		}
-		fmt.Fprintf(&s, "Key: %s\n", iss.Key)
-		fmt.Fprintf(&s, "Type: %s\n", iss.Fields.IssueType.Name)
-		fmt.Fprintf(&s, "Summary: %s\n", iss.Fields.Summary)
-		fmt.Fprintf(&s, "Status: %s\n", iss.Fields.Status.Name)
-		fmt.Fprintf(&s, "Priority: %s\n", iss.Fields.Priority.Name)
-		if iss.Fields.Assignee.Name != "" {
-			fmt.Fprintf(&s, "Assignee: %s\n", iss.Fields.Assignee.Name)
-		}
-		if len(iss.Fields.Labels) > 0 {
-			fmt.Fprintf(&s, "Labels: %s\n", strings.Join(iss.Fields.Labels, ", "))
-		}
-		if iss.Fields.Parent != nil && iss.Fields.Parent.Key != "" {
-			fmt.Fprintf(&s, "Parent: %s\n", iss.Fields.Parent.Key)
-		}
-		for _, cf := range l.CustomFields {
-			value := l.customFieldValue(CustomFieldColumnName(cf.Name), iss)
-			fmt.Fprintf(&s, "%s: %s\n", cf.Name, value)
+		if len(l.Display.Columns) > 0 {
+			l.renderCompactIssueColumns(&s, iss)
+		} else {
+			l.renderCompactIssueDefault(&s, iss)
 		}
 	}
 
 	_, err := fmt.Fprint(w, s.String())
 	return err
+}
+
+func (l *IssueList) renderCompactIssueColumns(s *strings.Builder, iss *jira.Issue) {
+	headers := l.resolveColumns(false)
+	values := l.assignColumns(headers, iss)
+
+	for i, column := range headers {
+		fmt.Fprintf(s, "%s: %s\n", l.compactColumnLabel(column), values[i])
+	}
+}
+
+func (l *IssueList) renderCompactIssueDefault(s *strings.Builder, iss *jira.Issue) {
+	fmt.Fprintf(s, "Key: %s\n", iss.Key)
+	fmt.Fprintf(s, "Type: %s\n", iss.Fields.IssueType.Name)
+	fmt.Fprintf(s, "Summary: %s\n", iss.Fields.Summary)
+	fmt.Fprintf(s, "Status: %s\n", iss.Fields.Status.Name)
+	fmt.Fprintf(s, "Priority: %s\n", iss.Fields.Priority.Name)
+	if iss.Fields.Assignee.Name != "" {
+		fmt.Fprintf(s, "Assignee: %s\n", iss.Fields.Assignee.Name)
+	}
+	if len(iss.Fields.Labels) > 0 {
+		fmt.Fprintf(s, "Labels: %s\n", strings.Join(iss.Fields.Labels, ", "))
+	}
+	if iss.Fields.Parent != nil && iss.Fields.Parent.Key != "" {
+		fmt.Fprintf(s, "Parent: %s\n", iss.Fields.Parent.Key)
+	}
+	for _, cf := range l.CustomFields {
+		value := l.customFieldValue(CustomFieldColumnName(cf.Name), iss)
+		fmt.Fprintf(s, "%s: %s\n", cf.Name, value)
+	}
+}
+
+func (l *IssueList) compactColumnLabel(column string) string {
+	for _, cf := range l.CustomFields {
+		if CustomFieldColumnName(cf.Name) == column ||
+			strings.ToUpper(jira.FieldIdentifier(cf.Name)) == column ||
+			strings.ToUpper(cf.Key) == column {
+			return cf.Name
+		}
+	}
+
+	switch column {
+	case fieldType:
+		return "Type"
+	case fieldKey:
+		return "Key"
+	case fieldSummary:
+		return "Summary"
+	case fieldStatus:
+		return "Status"
+	case fieldAssignee:
+		return "Assignee"
+	case fieldReporter:
+		return "Reporter"
+	case fieldPriority:
+		return "Priority"
+	case fieldResolution:
+		return "Resolution"
+	case fieldCreated:
+		return "Created"
+	case fieldUpdated:
+		return "Updated"
+	case fieldLabels:
+		return "Labels"
+	default:
+		return column
+	}
 }
 
 func (l *IssueList) validColumnsMap() map[string]struct{} {
@@ -210,6 +301,10 @@ func (l *IssueList) header() []string {
 		return validColumns[0:4]
 	}
 
+	return l.resolveColumns(true)
+}
+
+func (l *IssueList) resolveColumns(prependKey bool) []string {
 	var (
 		headers   []string
 		hasKeyCol bool
@@ -228,7 +323,7 @@ func (l *IssueList) header() []string {
 
 	// Key field is required in TUI to fetch relevant data later.
 	// So, we will prepend the field if it is not available.
-	if !hasKeyCol {
+	if prependKey && !hasKeyCol {
 		headers = append([]string{fieldKey}, headers...)
 	}
 

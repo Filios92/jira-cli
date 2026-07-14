@@ -1,8 +1,8 @@
 package list
 
 import (
-	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -60,6 +60,9 @@ $ jira issue list --plain --delimeter "|"
 
 # List issues as raw JSON data
 $ jira issue list --raw
+
+# List selected columns as raw JSON
+$ jira issue list --raw --columns key,status,"Story Points"
 
 # List issues of type "Epic" in status "Done"
 $ jira issue list -tEpic -sDone
@@ -149,7 +152,25 @@ func loadList(cmd *cobra.Command, args []string) {
 	cmdutil.ExitIfError(err)
 
 	if raw {
-		outputRawJSON(issues)
+		columns, err := cmd.Flags().GetString("columns")
+		cmdutil.ExitIfError(err)
+
+		projectCustomFields, _ := cmdcommon.GetProjectCustomFieldsForQuery(api.DefaultClient(debug), project, jqlFlag)
+
+		v := view.IssueList{
+			Data:         issues,
+			CustomFields: projectCustomFields,
+			Display: view.DisplayFormat{
+				Columns: func() []string {
+					if columns != "" {
+						return strings.Split(columns, ",")
+					}
+					return []string{}
+				}(),
+				Timezone: viper.GetString("timezone"),
+			},
+		}
+		cmdutil.ExitIfError(v.RenderRaw(os.Stdout))
 		return
 	}
 
@@ -218,15 +239,6 @@ func loadList(cmd *cobra.Command, args []string) {
 	cmdutil.ExitIfError(v.Render())
 }
 
-func outputRawJSON(issues []*jira.Issue) {
-	data, err := json.MarshalIndent(issues, "", "  ")
-	if err != nil {
-		cmdutil.Failed("Failed to marshal issues to JSON: %s", err)
-		return
-	}
-	fmt.Println(string(data))
-}
-
 // SetFlags sets flags supported by a list command.
 func SetFlags(cmd *cobra.Command) {
 	cmd.Flags().SortFlags = false
@@ -264,11 +276,11 @@ func SetFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool("no-truncate", false, "Show all available columns in plain mode. Works only with --plain")
 	cmd.Flags().String("delimiter", "\t", "Custom delimeter for columns in plain mode. Works only with --plain")
 	cmd.Flags().Uint("comments", 1, "Show N comments when viewing the issue")
-	cmd.Flags().Bool("raw", false, "Print raw JSON output")
+	cmd.Flags().Bool("raw", false, "Print raw JSON output. With --columns, returns only the selected fields")
 	cmd.Flags().Bool("csv", false, "Print output in CSV format")
 
 	if cmd.HasParent() && cmd.Parent().Name() != "sprint" {
-		cmd.Flags().String("columns", "", "Comma separated list of columns to display in the plain mode.\n"+
+		cmd.Flags().String("columns", "", "Comma separated list of columns to display in plain, compact, or raw mode.\n"+
 			fmt.Sprintf("Accepts: %s, plus project custom field names (e.g. 'Epic Link')",
 				strings.Join(view.ValidIssueColumns(), ", ")))
 		cmd.Flags().Uint("fixed-columns", 1, "Number of fixed columns in the interactive mode")
