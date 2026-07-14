@@ -41,7 +41,7 @@ func TestProjectCustomFieldsPaginated(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
-		case "/rest/api/2/issue/createmeta/IHT/issuetypes":
+		case "/rest/api/2/issue/createmeta/ACME/issuetypes":
 			assert.Equal(t, "0", r.URL.Query().Get("startAt"))
 			resp := `{
 				"startAt": 0,
@@ -52,7 +52,7 @@ func TestProjectCustomFieldsPaginated(t *testing.T) {
 			}`
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(resp))
-		case "/rest/api/2/issue/createmeta/IHT/issuetypes/10001":
+		case "/rest/api/2/issue/createmeta/ACME/issuetypes/10001":
 			fieldCalls++
 			startAt := r.URL.Query().Get("startAt")
 			if startAt == "0" {
@@ -87,7 +87,7 @@ func TestProjectCustomFieldsPaginated(t *testing.T) {
 
 	client := NewClient(Config{Server: server.URL}, WithTimeout(3*time.Second))
 
-	actual, err := client.ProjectCustomFields("IHT", InstallationTypeLocal, 9, 0)
+	actual, err := client.ProjectCustomFields("ACME", InstallationTypeLocal, 9, 0)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, fieldCalls)
 

@@ -3,6 +3,7 @@ package project
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/ankitpokhrel/jira-cli/internal/cmd/project/add"
 	"github.com/ankitpokhrel/jira-cli/internal/cmd/project/list"
 )
 
@@ -19,7 +20,10 @@ func NewCmdProject() *cobra.Command {
 		RunE:        projects,
 	}
 
-	cmd.AddCommand(list.NewCmdList())
+	cmd.AddCommand(
+		add.NewCmdAdd(),
+		list.NewCmdList(),
+	)
 
 	return &cmd
 }

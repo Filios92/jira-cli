@@ -133,7 +133,44 @@ Check `jira completion --help` for more info on setting up a bash/zsh shell comp
 
 #### Multiple projects
 
-You can load a specific configuration file by using the `--config/-c` flag, or by setting the `JIRA_CONFIG_FILE` environment variable to specify the file's location.
+You can define several projects in one config file under `projects`. The active project is selected with `-p` / `--project` (by key or display name). Per-project settings such as board are applied automatically.
+
+Add extra projects with `jira project add`, or by editing the config file manually. `jira init` is for (re)configuring the tool as a whole — it will ask before overwriting the file and only updates the project you select during init, while preserving other entries under `projects`.
+
+```yaml
+project:
+    key: PROJA         # default when -p is omitted
+    type: ""
+
+board:                 # kept for backward compatibility with the default project
+    id: 100
+    name: Alpha Board
+    type: kanban
+
+projects:
+    PROJA:
+        key: PROJA
+        type: ""
+        board:
+            id: 100
+            name: Alpha Board
+            type: kanban
+    PROJB:
+        key: PROJB
+        name: Project Beta
+        type: ""
+```
+
+```sh
+# Register another project interactively
+$ jira project add
+
+# Uses PROJB project context (custom fields, board, etc.)
+$ jira issue list -p PROJB --compact
+$ jira issue list -p "Project Beta" -q"labels = backend"
+```
+
+You can also load a separate configuration file with `--config/-c` or `JIRA_CONFIG_FILE`:
 
 ```sh
 $ JIRA_CONFIG_FILE=./local_jira_config.yaml jira issue list

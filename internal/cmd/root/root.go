@@ -93,6 +93,8 @@ func NewCmdRoot() *cobra.Command {
 			if !jiraConfig.Exists(configFile) {
 				cmdutil.Failed("Missing configuration file.\nRun 'jira init' to configure the tool.")
 			}
+
+			jiraConfig.ApplyProjectContext(viper.GetString("project.key"))
 		},
 	}
 

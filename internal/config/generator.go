@@ -755,6 +755,12 @@ func (c *JiraCLIConfigGenerator) write(path string) (string, error) {
 	config.Set("server", c.value.server)
 	config.Set("login", c.value.login)
 	config.Set("project", c.value.project)
+	if c.value.project != nil {
+		boardConf := projectBoardConf(c.value.board)
+		projects := ExistingProjectsMap()
+		projects[c.value.project.Key] = ProjectEntryFromConf(c.value.project, boardConf)
+		config.Set("projects", projects)
+	}
 	config.Set("epic", c.value.epic)
 	config.Set("issue.types", c.value.issueTypes)
 	config.Set("issue.fields.custom", c.value.customFields)
@@ -785,6 +791,17 @@ func (c *JiraCLIConfigGenerator) write(path string) (string, error) {
 		return "", err
 	}
 	return path, nil
+}
+
+func projectBoardConf(board *jira.Board) *BoardConf {
+	if board == nil || board.ID == 0 {
+		return nil
+	}
+	return &BoardConf{
+		ID:   board.ID,
+		Name: board.Name,
+		Type: board.Type,
+	}
 }
 
 func (c *JiraCLIConfigGenerator) getProjectSuggestions() error {
